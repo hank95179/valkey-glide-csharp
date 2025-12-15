@@ -260,7 +260,7 @@ public class StandaloneClientTests(TestConfiguration config)
     [InlineData(false)]
     public async Task BatchKeyCopyAndKeyMove(bool isAtomic)
     {
-        GlideClient client = TestConfiguration.DefaultStandaloneClient();
+        await using var client = await TestConfiguration.CreateClientAsync();
         string sourceKey = Guid.NewGuid().ToString();
         string destKey = Guid.NewGuid().ToString();
         string moveKey = Guid.NewGuid().ToString();

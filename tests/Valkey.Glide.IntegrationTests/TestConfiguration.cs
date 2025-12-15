@@ -47,6 +47,13 @@ public class TestConfiguration : IDisposable
     public static GlideClient DefaultStandaloneClient()
         => GlideClient.CreateClient(DefaultClientConfig().Build()).GetAwaiter().GetResult();
 
+    public static Task<GlideClient> CreateClientAsync(Action<StandaloneClientConfigurationBuilder>? configure = null)
+    {
+        var builder = DefaultClientConfig();
+        configure?.Invoke(builder);
+        return GlideClient.CreateClient(builder.Build());
+    }
+
     public static GlideClient LowTimeoutStandaloneClient()
         => GlideClient.CreateClient(DefaultClientConfigLowTimeout().Build()).GetAwaiter().GetResult();
 

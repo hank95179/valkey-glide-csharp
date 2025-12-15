@@ -120,8 +120,19 @@ public class PubSubClusterCommandTests(TestConfiguration config) : IDisposable
         GlideClusterClient publisherClient = await GlideClusterClient.CreateClient(publisherConfig);
         _testClients.Add(publisherClient);
 
-        // Wait for subscription to be established - sharded subscriptions in cluster mode may need more time
-        await Task.Delay(2000);
+        // Replace the fixed delay with an active polling loop to ensure the subscription is established.
+        // This is more robust than a fixed delay.
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        long currentSubscribers = 0;
+        while (stopwatch.Elapsed < TimeSpan.FromSeconds(5)) // Poll for up to 5 seconds
+        {
+            var numSub = await publisherClient.PubSubShardNumSubAsync([testChannel]);
+            if (numSub.TryGetValue(testChannel, out currentSubscribers) && currentSubscribers == 1)
+            {
+                break; // Subscriber found, exit loop
+            }
+            await Task.Delay(200); // Wait 200ms before next poll
+        }
 
         // Act
         long subscriberCount = await publisherClient.PublishAsync(testChannel, testMessage, sharded: true);

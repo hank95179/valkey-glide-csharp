@@ -120,22 +120,20 @@ public class PubSubClusterCommandTests(TestConfiguration config) : IDisposable
         GlideClusterClient publisherClient = await GlideClusterClient.CreateClient(publisherConfig);
         _testClients.Add(publisherClient);
 
-        // Replace the fixed delay with an active polling loop to ensure the subscription is established.
-        // This is more robust than a fixed delay.
+        // Replace the polling logic with a retry loop on the publish action itself.
+        // This is more robust as it directly checks the condition we care about and is immune to
+        // race conditions between different nodes in the cluster.
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        long currentSubscribers = 0;
-        while (stopwatch.Elapsed < TimeSpan.FromSeconds(5)) // Poll for up to 5 seconds
+        long subscriberCount = 0;
+        while (stopwatch.Elapsed < TimeSpan.FromSeconds(5)) // Try for up to 5 seconds
         {
-            var numSub = await publisherClient.PubSubShardNumSubAsync([testChannel]);
-            if (numSub.TryGetValue(testChannel, out currentSubscribers) && currentSubscribers == 1)
+            subscriberCount = await publisherClient.PublishAsync(testChannel, testMessage, sharded: true);
+            if (subscriberCount == 1)
             {
-                break; // Subscriber found, exit loop
+                break; // Success! The publish command returned the expected number of subscribers.
             }
-            await Task.Delay(200); // Wait 200ms before next poll
+            await Task.Delay(200); // Wait a short interval before retrying.
         }
-
-        // Act
-        long subscriberCount = await publisherClient.PublishAsync(testChannel, testMessage, sharded: true);
 
         // Assert
         Assert.Equal(1L, subscriberCount);
@@ -143,6 +141,7 @@ public class PubSubClusterCommandTests(TestConfiguration config) : IDisposable
         // Verify message was received
         PubSubMessageQueue? queue = subscriberClient.PubSubQueue;
         Assert.NotNull(queue);
+        // Allow a small delay for the message to be processed by the subscriber client
         await Task.Delay(500);
 
         bool hasMessage = queue.TryGetMessage(out PubSubMessage? receivedMessage);

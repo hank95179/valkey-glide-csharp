@@ -112,17 +112,15 @@ public class PubSubClusterCommandTests(TestConfiguration config) : IDisposable
             .WithPubSubSubscriptions(pubsubConfig)
             .Build();
 
-        GlideClusterClient subscriberClient = await GlideClusterClient.CreateClient(subscriberConfig);
+        await using var subscriberClient = await GlideClusterClient.CreateClient(subscriberConfig);
         _testClients.Add(subscriberClient);
 
         // Create publisher
         var publisherConfig = TestConfiguration.DefaultClusterClientConfig().Build();
-        GlideClusterClient publisherClient = await GlideClusterClient.CreateClient(publisherConfig);
+        await using var publisherClient = await GlideClusterClient.CreateClient(publisherConfig);
         _testClients.Add(publisherClient);
 
-        // Replace the polling logic with a retry loop on the publish action itself.
-        // This is more robust as it directly checks the condition we care about and is immune to
-        // race conditions between different nodes in the cluster.
+        // Act & Assert
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         long subscriberCount = 0;
         while (stopwatch.Elapsed < TimeSpan.FromSeconds(5)) // Try for up to 5 seconds
@@ -132,10 +130,16 @@ public class PubSubClusterCommandTests(TestConfiguration config) : IDisposable
             {
                 break; // Success! The publish command returned the expected number of subscribers.
             }
+
+            // Diagnostic logging to understand why PublishAsync returned 0.
+            var numSubResult = await publisherClient.PubSubShardNumSubAsync([testChannel]);
+            numSubResult.TryGetValue(testChannel, out long numSubCount);
+            Console.WriteLine($"DEBUG: PublishAsync returned {subscriberCount} for channel '{testChannel}'. PubSubShardNumSubAsync reported {numSubCount} subscribers. Retrying...");
+
             await Task.Delay(200); // Wait a short interval before retrying.
         }
 
-        // Assert
+        // The final assertion on the result of the retry loop.
         Assert.Equal(1L, subscriberCount);
 
         // Verify message was received

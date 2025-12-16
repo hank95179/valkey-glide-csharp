@@ -1,5 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+using Xunit.Abstractions;
+
 namespace Valkey.Glide.IntegrationTests;
 
 /// <summary>
@@ -96,7 +98,7 @@ public class PubSubClusterCommandTests(TestConfiguration config) : IDisposable
     }
 
     [Fact]
-    public async Task PublishAsync_ShardedChannel_WithSubscriber_ReturnsSubscriberCount()
+    public async Task PublishAsync_ShardedChannel_WithSubscriber_ReturnsSubscriberCount(ITestOutputHelper output)
     {
         Assert.SkipWhen(TestConfiguration.IsVersionLessThan("7.0.0"), "Sharded PubSub is supported since 7.0.0");
 
@@ -134,7 +136,7 @@ public class PubSubClusterCommandTests(TestConfiguration config) : IDisposable
             // Diagnostic logging to understand why PublishAsync returned 0.
             var numSubResult = await publisherClient.PubSubShardNumSubAsync([testChannel]);
             numSubResult.TryGetValue(testChannel, out long numSubCount);
-            Console.WriteLine($"DEBUG: PublishAsync returned {subscriberCount} for channel '{testChannel}'. PubSubShardNumSubAsync reported {numSubCount} subscribers. Retrying...");
+            output.WriteLine($"DEBUG: PublishAsync returned {subscriberCount} for channel '{testChannel}'. PubSubShardNumSubAsync reported {numSubCount} subscribers. Retrying...");
 
             await Task.Delay(200); // Wait a short interval before retrying.
         }
